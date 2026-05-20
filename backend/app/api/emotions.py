@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, WebSocket, HTTPException, status
+from fastapi import APIRouter, Depends, WebSocket, HTTPException, status, UploadFile, File
 from typing import List, Optional
 from datetime import datetime
 from app.core.security import get_current_user
@@ -7,6 +7,7 @@ from app.ai.emotion_detector import emotion_engine
 from app.services.emotional_tracking import emotional_tracking_engine
 from app.services.scoring_engine import scoring_engine
 from app.services.intervention_engine import intervention_engine
+from app.services.groq_service import groq_service
 from app.schemas.models import EmotionEventCreate, EmotionEvent
 from app.websocket.manager import manager
 from bson import ObjectId
@@ -124,6 +125,88 @@ async def detect_face_emotion(
     return analysis
 
 
+# ========================
+# EXPANSION 1: Audio/Voice Emotion Detection
+# ========================
+@router.post("/detect-audio")
+async def detect_audio_emotion(
+    audio: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Detect emotions from an audio recording.
+    1. Transcribes audio using Groq Whisper
+    2. Runs emotion analysis on the transcript
+    3. Records the event and returns multi-modal results
+    """
+    user_id = current_user["sub"]
+    
+    # Validate file type
+    allowed_types = ["audio/wav", "audio/mpeg", "audio/mp3", "audio/webm", "audio/ogg", "audio/mp4", "audio/m4a"]
+    if audio.content_type and audio.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported audio format: {audio.content_type}. Supported: wav, mp3, webm, ogg, m4a"
+        )
+    
+    # Read audio bytes
+    audio_bytes = await audio.read()
+    if len(audio_bytes) < 1000:
+        raise HTTPException(status_code=400, detail="Audio file too small. Please record at least 1 second.")
+    
+    # Step 1: Transcribe audio using Whisper
+    transcription = await groq_service.transcribe_audio(audio_bytes, filename=audio.filename or "audio.wav")
+    
+    if not transcription.get("text"):
+        return {
+            "transcription": "",
+            "emotions": {},
+            "dominant_emotion": "neutral",
+            "dominant_intensity": 0.0,
+            "error": transcription.get("error", "Could not transcribe audio. Try speaking more clearly.")
+        }
+    
+    transcript_text = transcription["text"]
+    
+    # Step 2: Analyze emotions from transcript
+    analysis = await emotion_engine.analyze_text_comprehensive(transcript_text)
+    
+    # Step 3: Record the emotion event
+    db = get_database()
+    dominant_emotion = analysis["dominant_emotion"]
+    dominant_intensity = analysis["dominant_intensity"]
+    
+    if dominant_intensity > 0.1:
+        emotional_tracking_engine.add_emotion_event(
+            user_id=user_id,
+            emotion=dominant_emotion,
+            intensity=dominant_intensity,
+            source="voice"
+        )
+        
+        await db.realtime_emotion_events.insert_one({
+            "user_id": user_id,
+            "emotion": dominant_emotion,
+            "intensity": dominant_intensity,
+            "source": "voice",
+            "transcript": transcript_text[:500],
+            "timestamp": datetime.utcnow()
+        })
+    
+    return {
+        "transcription": transcript_text,
+        "duration": transcription.get("duration"),
+        "language": transcription.get("language", "en"),
+        "emotions": analysis["emotions"],
+        "dominant_emotion": dominant_emotion,
+        "dominant_intensity": dominant_intensity,
+        "positivity": analysis["positivity"],
+        "sentiment": analysis["sentiment"],
+        "suggestions": analysis.get("suggestions", []),
+        "insight": analysis.get("insight", "")
+    }
+
+
 @router.post("/record")
 async def record_emotion(
     emotion_event: EmotionEventCreate,
@@ -159,12 +242,13 @@ async def record_emotion(
         user_id=user_id,
         emotion=emotion_event.emotion,
         intensity=emotion_event.intensity,
-        escalation_score=tracking_result["escalation_score"],
-        is_critical=tracking_result["is_critical"]
+        escalation_score=tracking_result.get("escalation_score", 0.0),
+        is_critical=escalation_pattern.get("critical", False)
     )
     
     # If escalating or critical, trigger interventions
-    if escalation_pattern["is_escalating"]:
+    is_escalating = escalation_pattern.get("critical", False) or escalation_pattern.get("escalation_level") in ("high", "critical")
+    if is_escalating:
         # Get user's safe links
         safe_links = await db.user_safe_links.find({"user_id": user_id}).to_list(5)
         
@@ -195,8 +279,8 @@ async def record_emotion(
         "event_recorded": True,
         "event_id": str(result.inserted_id),
         "escalation": tracking_result,
-        "is_escalating": escalation_pattern["is_escalating"],
-        "escalation_level": escalation_pattern["escalation_level"]
+        "is_escalating": is_escalating,
+        "escalation_level": escalation_pattern.get("escalation_level", "normal")
     }
 
 
@@ -215,7 +299,12 @@ async def get_emotion_history(
     events = await db.realtime_emotion_events.find({
         "user_id": user_id,
         "timestamp": {"$gt": cutoff_time}
-    }).to_list(None)
+    }).sort("timestamp", -1).limit(500).to_list(500)
+    
+    # Serialize ObjectIds
+    for e in events:
+        if "_id" in e:
+            e["_id"] = str(e["_id"])
     
     return {
         "events": events,

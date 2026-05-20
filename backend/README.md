@@ -56,8 +56,7 @@ backend/
 │       └── models.py         # Pydantic models
 ├── main.py                   # FastAPI app entry point
 ├── requirements.txt          # Python dependencies
-├── Dockerfile                # Docker image definition
-└── docker-compose.yml        # Local development setup
+
 
 ```
 
@@ -106,17 +105,7 @@ Events:
 
 ## Setup & Installation
 
-### Using Docker Compose (Recommended)
 
-```bash
-cd backend
-docker-compose up -d
-```
-
-This starts:
-- MongoDB at localhost:27017
-- Redis at localhost:6379
-- FastAPI at localhost:8000
 
 ### Manual Setup
 
@@ -143,7 +132,7 @@ pip install -r requirements.txt
 5. **Set up Redis**
 ```bash
 # On Windows: Download from https://github.com/microsoftarchive/redis/releases
-# Or use Docker: docker run -d -p 6379:6379 redis:7-alpine
+
 ```
 
 6. **Create .env file**

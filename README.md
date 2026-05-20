@@ -272,6 +272,54 @@ curl -X POST http://localhost:8000/api/auth/login \
 
 ---
 
+## 📈 Performance & Load Testing
+
+The backend includes a comprehensive data seeding and load testing suite to verify scalability and performance under real-world conditions.
+
+### Mass Data Seeding
+A standalone Python script populates MongoDB with realistic synthetic data:
+- Generates 50 users with 90 days of history each.
+- Produces realistic mood arcs, weekend/weekday patterns, and data gaps.
+- Creates ~23,000+ documents (journals, emotion events, wellness scores) in seconds.
+
+**Run the Seed Script:**
+```bash
+cd backend
+python -m scripts.seed_database
+```
+
+### Locust Load Testing
+We use [Locust](https://locust.io/) to simulate concurrent users with realistic API usage patterns (Standard Users and Heavy Readers).
+
+**Run a Load Test:**
+```bash
+cd backend
+# With Web UI (http://localhost:8089)
+python -m locust -f locustfile.py --host http://localhost:8000
+
+# Headless (e.g., 50 users for 1 minute)
+python -m locust -f locustfile.py --host http://localhost:8000 --headless -u 50 -r 10 --run-time 1m
+```
+
+### Real-Time Performance Profiler
+A custom middleware tracks the execution time of every request.
+- Adds `X-Process-Time-Ms` header to every response.
+- Logs warnings for any request exceeding 500ms.
+- Exposes aggregate performance metrics via API.
+
+**Check Performance Stats:**
+```bash
+curl http://localhost:8000/api/perf/stats
+```
+
+**Key Benchmark Results (50 Concurrent Users):**
+- **Throughput:** ~3.87 requests per second (mixed read/write workload).
+- **Success Rate:** 99.1% (failed requests were simulated 404s).
+- **Journal Pagination:** Extremely fast (150ms median).
+- **Analytics:** Complex aggregations take ~4.7s average under heavy load.
+
+---
+
 ## ⚙️ Configuration
 
 ### Environment Variables (.env)

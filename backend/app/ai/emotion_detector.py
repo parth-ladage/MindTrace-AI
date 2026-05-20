@@ -40,30 +40,50 @@ class EmotionDetectionEngine:
             return None
 
     async def detect_emotions_groq(self, text: str) -> Dict[str, float]:
-        """Detect emotions using Groq (Llama 3) for high accuracy"""
+        """Detect emotions using Groq (Llama 3.3 70B) for high accuracy with anti-bias safeguards"""
         if not groq_service.client:
             return {}
         
         try:
-            prompt = (
-                f"Analyze the emotions in this text: \"{text}\". "
-                "Return only a valid JSON object with emotions as keys (joy, sadness, anger, fear, surprise, neutral) "
-                "and their intensities (0.0 to 1.0) as values. No other text."
+            system_prompt = (
+                "You are an objective, clinical-grade sentiment classifier. "
+                "You MUST NOT over-diagnose sadness, anger, or fear. "
+                "If the text is casual, factual, or lacks strong emotional language, "
+                "assign 'neutral' a high score (0.6+). "
+                "Only assign negative emotions high scores when the language clearly and explicitly expresses them. "
+                "Be balanced and precise."
             )
-            chat_completion = groq_service.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama3-8b-8192",
+            prompt = (
+                f"Classify the emotions in this text: \"{text}\". "
+                "Return ONLY a valid JSON object with these exact keys: joy, sadness, anger, fear, surprise, neutral. "
+                "Values must be floats from 0.0 to 1.0 and should sum to approximately 1.0. "
+                "No other text or explanation."
+            )
+            chat_completion = await groq_service.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                model="llama-3.3-70b-versatile",
                 max_tokens=100,
+                temperature=0.0,
                 response_format={"type": "json_object"}
             )
             import json
-            return json.loads(chat_completion.choices[0].message.content)
+            emotions = json.loads(chat_completion.choices[0].message.content)
+            
+            # Normalize: ensure all expected keys exist
+            for key in ["joy", "sadness", "anger", "fear", "surprise", "neutral"]:
+                if key not in emotions:
+                    emotions[key] = 0.0
+            
+            return emotions
         except Exception as e:
             logger.error(f"Groq Emotion Detection Error: {e}")
             return {}
 
     async def analyze_text_comprehensive(self, text: str) -> Dict:
-        """Comprehensive analysis using Groq for superior insights"""
+        """Comprehensive analysis using Groq for superior insights with anti-bias safeguards"""
         text_clean = text.strip().lower()
         if text_clean in self._cache:
             result = self._cache[text_clean].copy()
@@ -85,20 +105,38 @@ class EmotionDetectionEngine:
         dominant_emotion = max(emotions, key=emotions.get) if emotions else "neutral"
         dominant_intensity = emotions.get(dominant_emotion, 0)
         
-        # Calculate positivity based on emotions
-        positivity = emotions.get("joy", 0) * 1.2 + emotions.get("surprise", 0) * 0.5 - emotions.get("sadness", 0) * 0.5 - emotions.get("anger", 0) * 0.8
-        positivity = max(0.0, min(1.0, (positivity + 1) / 2)) # Normalize to 0-1
+        # ANTI-BIAS SAFEGUARD: If the highest emotion intensity is very low,
+        # override to neutral to prevent false-positive negative emotions.
+        if dominant_intensity < 0.3 and dominant_emotion != "neutral":
+            dominant_emotion = "neutral"
+            dominant_intensity = emotions.get("neutral", 0.5)
+        
+        # Improved positivity calculation with balanced weighting
+        positive_score = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.5 + emotions.get("neutral", 0) * 0.4
+        negative_score = emotions.get("sadness", 0) + emotions.get("anger", 0) + emotions.get("fear", 0) * 0.8
+        total = positive_score + negative_score + 0.001  # avoid division by zero
+        positivity = max(0.0, min(1.0, positive_score / total))
 
         # Generate personalized suggestion via Groq
         suggestions = await groq_service.get_personalized_suggestions(dominant_emotion, dominant_intensity, positivity)
         insight = await groq_service.get_daily_quote(context=dominant_emotion)
 
+        # Build balanced sentiment breakdown
+        sentiment_positive = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.3
+        sentiment_negative = emotions.get("sadness", 0) + emotions.get("anger", 0) + emotions.get("fear", 0)
+        sentiment_neutral = emotions.get("neutral", 0)
+        sent_total = sentiment_positive + sentiment_negative + sentiment_neutral + 0.001
+
         analysis_result = {
             "emotions": emotions,
             "dominant_emotion": dominant_emotion,
             "dominant_intensity": dominant_intensity,
-            "positivity": positivity,
-            "sentiment": {"positive": positivity, "neutral": 1-positivity if positivity < 0.5 else 0, "negative": 1-positivity if positivity >= 0.5 else 0},
+            "positivity": round(positivity, 3),
+            "sentiment": {
+                "positive": round(sentiment_positive / sent_total, 3),
+                "neutral": round(sentiment_neutral / sent_total, 3),
+                "negative": round(sentiment_negative / sent_total, 3)
+            },
             "suggestions": suggestions,
             "insight": insight,
             "timestamp": datetime.now().isoformat(),
@@ -152,10 +190,17 @@ class EmotionDetectionEngine:
             return {"dominant_emotion": "neutral", "dominant_intensity": 0.0, "emotions": {}, "error": str(e)}
     
     def _fallback_emotions(self, text: str) -> Dict[str, float]:
+        """Keyword-based fallback with balanced defaults"""
         text = text.lower()
-        if "happy" in text or "great" in text: return {"joy": 0.8}
-        if "sad" in text or "bad" in text: return {"sadness": 0.8}
-        if "angry" in text or "mad" in text: return {"anger": 0.8}
-        return {"neutral": 0.5}
+        if any(w in text for w in ["happy", "great", "amazing", "wonderful", "excited", "love"]): 
+            return {"joy": 0.7, "neutral": 0.2, "sadness": 0.0, "anger": 0.0, "fear": 0.0, "surprise": 0.1}
+        if any(w in text for w in ["sad", "crying", "depressed", "hopeless", "miserable"]): 
+            return {"sadness": 0.7, "neutral": 0.1, "joy": 0.0, "anger": 0.1, "fear": 0.1, "surprise": 0.0}
+        if any(w in text for w in ["angry", "mad", "furious", "hate", "rage"]): 
+            return {"anger": 0.7, "neutral": 0.1, "joy": 0.0, "sadness": 0.1, "fear": 0.1, "surprise": 0.0}
+        if any(w in text for w in ["scared", "afraid", "terrified", "anxious", "worried"]): 
+            return {"fear": 0.6, "neutral": 0.2, "joy": 0.0, "sadness": 0.1, "anger": 0.0, "surprise": 0.1}
+        # Default: neutral-heavy — prevents false sadness
+        return {"neutral": 0.7, "joy": 0.1, "sadness": 0.05, "anger": 0.05, "fear": 0.05, "surprise": 0.05}
 
 emotion_engine = EmotionDetectionEngine()

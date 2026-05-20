@@ -57,11 +57,12 @@ class User(UserBase):
 
 # Emotion Event Models
 class EmotionEventCreate(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     emotion: str
     intensity: float
     source: str  # "journal", "face", "chat"
     context: Optional[str] = None
+    note: Optional[str] = None  # To support frontend sending "note" instead of "context"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 

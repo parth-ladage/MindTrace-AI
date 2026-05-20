@@ -1,5 +1,6 @@
 import logging
-from typing import List
+import io
+from typing import List, Dict, Any
 from groq import AsyncGroq
 from app.core.config import settings
 
@@ -32,7 +33,7 @@ class GroqService:
             return "Your mind is your most powerful tool. Trace it well."
 
     async def get_personalized_suggestions(self, dominant_emotion: str, intensity: float, positivity: float) -> List[str]:
-        """Generate personalized wellness suggestions based on emotional state"""
+        """Generate personalized wellness suggestions with dynamic YouTube resource links"""
         if not self.client:
             return ["Practice mindful breathing.", "Stay hydrated.", "Take a short walk."]
         
@@ -41,12 +42,14 @@ class GroqService:
                 f"Based on the following emotional state: dominant emotion: {dominant_emotion}, "
                 f"intensity: {intensity*100}%, positivity: {positivity*100}%. "
                 "Provide 3 personalized, actionable, and futuristic wellness suggestions for the MindTrace AI+ user. "
+                "For EACH suggestion, also include a relevant YouTube search URL in parentheses at the end. "
+                "Format the URL as: (https://www.youtube.com/results?search_query=<relevant+search+terms>) "
                 "Return them as a simple list separated by newlines, no numbers."
             )
             chat_completion = await self.client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="llama-3.3-70b-versatile",
-                max_tokens=150,
+                max_tokens=250,
             )
             suggestions = chat_completion.choices[0].message.content.strip().split('\n')
             # Clean up and limit to 3
@@ -123,6 +126,12 @@ class GroqService:
         You are the MindTrace AI+ Core Synthesis Engine, a clinical-grade psychological analyzer.
         Your task is to analyze the provided journal text with maximum precision.
         
+        CRITICAL ANTI-BIAS RULES:
+        - Do NOT default to 'sadness' or 'anxiety' for normal, everyday text.
+        - If the text describes routine activities, casual thoughts, or factual statements without strong emotional language, classify as 'Neutral'.
+        - Only classify as a negative emotion if the text EXPLICITLY contains distressed, anguished, or strongly negative language.
+        - Be especially careful not to over-diagnose. Neutral is a valid and common result.
+        
         Advanced Methodology:
         1. Contextual Mapping: Don't just look for keywords. Understand the underlying tone and temporal stability of the user's state.
         2. Sentiment Decomposition: Distinguish between situational frustration and systemic distress.
@@ -154,10 +163,10 @@ class GroqService:
                 "Format strictly as JSON: {\"dominant_emotion\": \"...\", \"intensity\": 0.0, \"suggestions\": [\"...\", \"...\", \"...\"]}"
             )
             chat_completion = await self.client.chat.completions.create(
-                messages=[{"role": "system", "content": "You are an expert psychological analyzer for MindTrace AI+. You detect subtle emotional subtext that standard algorithms miss."},
+                messages=[{"role": "system", "content": system_prompt},
                           {"role": "user", "content": prompt}],
                 model="llama-3.3-70b-versatile",
-                temperature=0.3, # Lower temperature for more analytical/precise output
+                temperature=0.1, # Very low temperature for precise, deterministic classification
                 response_format={"type": "json_object"}
             )
             import json
@@ -210,5 +219,96 @@ class GroqService:
             logger.error(f"LLM Call Error: {e}")
             return "I'm still here with you. Let's just breathe for a moment."
 
-groq_service = GroqService()
+    # ========================
+    # EXPANSION 1: Audio/Voice Emotion Detection via Whisper
+    # ========================
+    async def transcribe_audio(self, audio_bytes: bytes, filename: str = "audio.wav") -> Dict[str, Any]:
+        """
+        Transcribe audio using Groq's Whisper model.
+        Returns the transcribed text for further emotion analysis.
+        """
+        if not self.client:
+            return {"text": "", "error": "Groq client not initialized"}
+        
+        try:
+            audio_file = io.BytesIO(audio_bytes)
+            audio_file.name = filename
+            
+            transcription = await self.client.audio.transcriptions.create(
+                file=(filename, audio_file),
+                model="whisper-large-v3",
+                language="en",
+                response_format="verbose_json"
+            )
+            
+            return {
+                "text": transcription.text,
+                "duration": getattr(transcription, 'duration', None),
+                "language": getattr(transcription, 'language', 'en')
+            }
+        except Exception as e:
+            logger.error(f"Audio transcription error: {e}")
+            return {"text": "", "error": str(e)}
 
+    # ========================
+    # EXPANSION 2: Weekly Emotional Synthesis
+    # ========================
+    async def generate_weekly_synthesis(self, emotion_summary: Dict, journal_snippets: List[str]) -> Dict[str, Any]:
+        """
+        Generate a comprehensive weekly emotional synthesis report.
+        Takes aggregated emotion data + journal snippets and produces:
+        - Overall trend analysis
+        - Behavioral patterns detected
+        - Long-term recommendations
+        - Risk assessment
+        """
+        if not self.client:
+            return {
+                "trend": "stable",
+                "summary": "Not enough data for weekly analysis.",
+                "patterns": [],
+                "recommendations": ["Continue journaling daily."],
+                "risk_level": "low"
+            }
+        
+        try:
+            snippets_text = "\n".join([f"- {s[:200]}" for s in journal_snippets[:10]])
+            
+            prompt = (
+                f"Analyze this user's emotional week for MindTrace AI+.\n\n"
+                f"Emotion Distribution: {emotion_summary}\n\n"
+                f"Journal Excerpts:\n{snippets_text}\n\n"
+                "Provide a comprehensive weekly synthesis as strict JSON with these keys:\n"
+                "- trend: one of 'improving', 'stable', 'declining'\n"
+                "- summary: 2-3 sentence overview of their emotional week\n"
+                "- patterns: list of 2-3 behavioral patterns detected\n"
+                "- recommendations: list of 3 specific, actionable long-term recommendations\n"
+                "- risk_level: one of 'low', 'moderate', 'high'\n"
+                "- highlight: the single most positive moment from the week\n"
+                "Only return the JSON."
+            )
+            
+            chat_completion = await self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are an expert behavioral psychologist providing weekly emotional synthesis for the MindTrace AI+ platform. Be objective and balanced."},
+                    {"role": "user", "content": prompt}
+                ],
+                model="llama-3.3-70b-versatile",
+                max_tokens=500,
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            
+            import json
+            return json.loads(chat_completion.choices[0].message.content)
+        except Exception as e:
+            logger.error(f"Weekly synthesis error: {e}")
+            return {
+                "trend": "stable",
+                "summary": "Unable to generate synthesis at this time.",
+                "patterns": [],
+                "recommendations": ["Continue your daily journaling practice."],
+                "risk_level": "low"
+            }
+
+groq_service = GroqService()

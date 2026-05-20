@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     ESCALATION_THRESHOLD: float = 0.7
     CRITICAL_THRESHOLD: float = 0.85
     WINDOW_SIZE: int = 3600  # 1 hour in seconds
+    EMOTIONAL_WINDOW_MINUTES: int = 60  # Sliding window for emotional tracking
     
     # CORS Origins - Whitelist for Netlify and Local
     CORS_ORIGINS: Any = ["https://mindtrace-frontend.netlify.app", "https://mindtrace-ai.netlify.app", "http://localhost:3000"]

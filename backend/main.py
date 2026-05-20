@@ -5,6 +5,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
+from app.core.profiler import PerformanceProfilerMiddleware, get_perf_stats, reset_perf_stats, SLOW_THRESHOLD_MS
 from app.ai.emotion_detector import emotion_engine
 from app.api import auth, emotions, journal, interventions, analytics, chatbot, sos, safe_links, users, websockets, companion
 
@@ -58,10 +59,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Performance Profiling Middleware
+app.add_middleware(PerformanceProfilerMiddleware)
+
 @app.middleware("http")
 async def log_requests(request, call_next):
     logger.info(f"Request: {request.method} {request.url.path}")
-    logger.info(f"Headers: {dict(request.headers)}")
+    # SECURITY: Redact sensitive headers to prevent token leakage in logs
+    safe_headers = {
+        k: ("***REDACTED***" if k.lower() in ("authorization", "cookie", "x-api-key") else v)
+        for k, v in request.headers.items()
+    }
+    logger.debug(f"Headers: {safe_headers}")
     response = await call_next(request)
     logger.info(f"Response status: {response.status_code}")
     return response
@@ -77,6 +86,22 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+@app.get("/api/perf/stats")
+async def performance_stats():
+    """Returns real-time performance metrics for all API routes."""
+    return {
+        "stats": get_perf_stats(),
+        "slow_threshold_ms": SLOW_THRESHOLD_MS
+    }
+
+
+@app.post("/api/perf/reset")
+async def reset_performance_stats():
+    """Reset all performance counters (use between test runs)."""
+    reset_perf_stats()
+    return {"status": "reset"}
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

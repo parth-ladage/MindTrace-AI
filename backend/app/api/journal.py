@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from typing import List, Optional
 from datetime import datetime
 from app.core.security import get_current_user
@@ -16,6 +16,7 @@ router = APIRouter()
 @router.post("/create")
 async def create_journal_entry(
     entry_data: JournalEntryCreate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new journal entry with emotion detection"""
@@ -48,6 +49,7 @@ async def create_journal_entry(
     
     # FINAL HOLISTIC SCORE (Average of Text, Audio, and Video)
     final_positivity_score = (text_positivity + audio_score + video_score) / 3.0
+    dominant_intensity = ai_analysis.get("intensity", hf_analysis["intensity"])
     
     # Create entry document
     entry_doc = {
@@ -56,12 +58,12 @@ async def create_journal_entry(
         "emotions_detected": [dominant_emotion],
         "all_scores": hf_analysis["all_emotions"],
         "dominant_emotion": dominant_emotion,
-        "dominant_intensity": ai_analysis.get("intensity", hf_analysis["intensity"]),
+        "dominant_intensity": dominant_intensity,
         "text_score": text_positivity,
         "audio_score": audio_score,
         "video_score": video_score,
         "positivity": final_positivity_score, # This is now the average score
-        "mood_intensity": ai_analysis.get("intensity", hf_analysis["intensity"]),
+        "mood_intensity": dominant_intensity,
         "suggestions": ai_analysis.get("suggestions", []),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
@@ -75,15 +77,19 @@ async def create_journal_entry(
         tracking_result = emotional_tracking_engine.add_emotion_event(
             user_id=user_id,
             emotion=dominant_emotion,
-            intensity=intensity,
+            intensity=dominant_intensity,
             source="journal",
             context=f"Journal entry: {entry_data.content[:100]}"
         )
         
-        # SOS / Guardian Alert Logic
+        # SOS / Guardian Alert Logic (MULTI-FACTOR — requires BOTH models to agree)
         CRITICAL_EMOTIONS = ["sadness", "fear", "anger", "depressed", "anxiety", "frustration", "lonely"]
-        # Trigger if holistic positivity is very low (< 0.3) OR text intensity is critical
-        if (dominant_emotion in CRITICAL_EMOTIONS and final_positivity_score < 0.3) or (ai_analysis.get("intensity", 0) > 0.9):
+        hf_is_critical = hf_analysis["intensity"] > 0.75 and hf_analysis["dominant_emotion"].lower() in CRITICAL_EMOTIONS
+        groq_is_critical = ai_analysis.get("intensity", 0) > 0.9
+        
+        # BOTH models must flag the text as critical to trigger an SOS alert.
+        # This prevents prompt injection attacks where a user manipulates the LLM.
+        if (dominant_emotion in CRITICAL_EMOTIONS and final_positivity_score < 0.3) and (hf_is_critical or groq_is_critical):
             user = await db.users.find_one({"_id": ObjectId(user_id)})
             if user and user.get("guardian_email"):
                 from app.services.alert_service import alert_service
@@ -99,19 +105,19 @@ async def create_journal_entry(
     now_hour = datetime.now().hour
     if now_hour >= 21:
         from app.services.report_service import report_service
-        # Background task
-        import asyncio
-        asyncio.create_task(report_service.generate_daily_report(user_id))
+        # Use FastAPI BackgroundTasks instead of dangling asyncio.create_task
+        background_tasks.add_task(report_service.generate_daily_report, user_id)
 
     return {
         "entry_id": str(result.inserted_id),
         "dominant_emotion": dominant_emotion,
         "sentiment": dominant_emotion,
-        "positivity": 1.0 - intensity if dominant_emotion in ["sadness", "anger", "fear"] else intensity,
+        "positivity": 1.0 - dominant_intensity if dominant_emotion in ["sadness", "anger", "fear"] else dominant_intensity,
         "suggestions": ai_analysis.get("suggestions", []),
         "insight": ai_analysis.get("dominant_emotion", "Neutral"),
         "report_triggered": now_hour >= 21
     }
+
 
 
 @router.get("/list")

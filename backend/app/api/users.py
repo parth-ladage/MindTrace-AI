@@ -4,9 +4,10 @@ from datetime import datetime
 from app.core.security import get_current_user
 from app.core.database import get_database
 from bson import ObjectId
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from app.utils.mock_data import seed_mock_data
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,22 +22,30 @@ async def trigger_seed_mock_data(
 
 
 class UserProfileUpdate(BaseModel):
-    full_name: Optional[str] = None
-    name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    full_name: Optional[str] = Field(None, max_length=100)
+    name: Optional[str] = Field(None, max_length=100)
+    avatar_url: Optional[str] = Field(None, max_length=500)
     theme_preference: Optional[str] = None
-    age: Optional[int] = None
-    timezone: Optional[str] = None
-    gender: Optional[str] = None
-    occupation: Optional[str] = None
-    bio: Optional[str] = None
+    age: Optional[int] = Field(None, ge=10, le=120)
+    timezone: Optional[str] = Field(None, max_length=50)
+    gender: Optional[str] = Field(None, max_length=30)
+    occupation: Optional[str] = Field(None, max_length=100)
+    bio: Optional[str] = Field(None, max_length=500)
     notification_enabled: Optional[bool] = None
     public_profile: Optional[bool] = None
-    guardian_email: Optional[str] = None
+    guardian_email: Optional[str] = Field(None, max_length=254)
     interests: Optional[List[str]] = None
     background_tracking_enabled: Optional[bool] = None
     report_enabled: Optional[bool] = None
     report_frequency: Optional[str] = None
+
+    @field_validator("bio", "name", "full_name", "occupation", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v):
+        if v is not None:
+            # Strip HTML/script tags to prevent stored XSS
+            v = re.sub(r"<[^>]*>", "", str(v))
+        return v
 
 
 def _serialize_profile(user: dict) -> dict:
@@ -201,30 +210,36 @@ async def get_wellness_stats(
 
 
 async def _calculate_engagement_streak(db, user_id: str) -> int:
-    """Calculate days of consecutive engagement"""
+    """Calculate days of consecutive engagement using a single DB query."""
     from datetime import timedelta
-    
+
+    # Fetch all distinct activity dates in one shot (capped at 365 days for safety)
+    cutoff = datetime.utcnow() - timedelta(days=365)
+    pipeline = [
+        {"$match": {"user_id": user_id, "timestamp": {"$gte": cutoff}}},
+        {"$project": {"date_str": {"$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}}}},
+        {"$group": {"_id": "$date_str"}},
+        {"$sort": {"_id": -1}}
+    ]
+    results = await db.realtime_emotion_events.aggregate(pipeline).to_list(365)
+    active_dates = sorted({r["_id"] for r in results}, reverse=True)
+
+    if not active_dates:
+        return 0
+
     streak = 0
-    current_date = datetime.utcnow().date()
-    
-    while True:
-        date_str = current_date.strftime("%Y-%m-%d")
-        
-        # Check if user had any activity this day
-        activity = await db.realtime_emotion_events.count_documents({
-            "user_id": user_id,
-            "timestamp": {
-                "$gte": datetime.strptime(date_str, "%Y-%m-%d"),
-                "$lt": datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)
-            }
-        })
-        
-        if activity > 0:
+    expected_date = datetime.utcnow().date()
+    for date_str in active_dates:
+        activity_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        # Allow today or yesterday as the starting point
+        if streak == 0 and (expected_date - activity_date).days > 1:
+            return 0
+        if activity_date == expected_date:
             streak += 1
-            current_date -= timedelta(days=1)
-        else:
-            break
-    
+            expected_date -= timedelta(days=1)
+        elif activity_date < expected_date:
+            break  # Gap found, streak is over
+
     return streak
 
 
@@ -314,10 +329,17 @@ async def export_user_data(
     user_id = current_user["sub"]
     db = get_database()
     
-    # Collect all user data
-    emotions = await db.realtime_emotion_events.find({"user_id": user_id}).to_list(None)
-    journals = await db.journal_entries.find({"user_id": user_id}).to_list(None)
-    wellness_scores = await db.wellness_scores.find({"user_id": user_id}).to_list(None)
+    # Collect user data (capped at 1000 per collection to prevent OOM)
+    MAX_EXPORT = 1000
+    emotions = await db.realtime_emotion_events.find(
+        {"user_id": user_id}
+    ).sort("timestamp", -1).limit(MAX_EXPORT).to_list(MAX_EXPORT)
+    journals = await db.journal_entries.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(MAX_EXPORT).to_list(MAX_EXPORT)
+    wellness_scores = await db.wellness_scores.find(
+        {"user_id": user_id}
+    ).sort("date", -1).limit(MAX_EXPORT).to_list(MAX_EXPORT)
     
     # Convert ObjectIds to strings
     for item in emotions + journals + wellness_scores:

@@ -36,14 +36,9 @@ class CompanionService:
         db = get_database()
         
         # 1. Fetch Live Emotional State
-        # We get the latest window or the last detected emotion
+        current_emotion = emotional_tracking_engine.get_dominant_emotion(user_id) or "neutral"
         escalation = emotional_tracking_engine.detect_escalation_patterns(user_id)
-        current_emotion = "neutral"
-        intensity = 0.5
-        
-        if escalation["trigger_emotions"]:
-            current_emotion = escalation["trigger_emotions"][0]
-            intensity = escalation["escalation_score"]
+        intensity = escalation.get("score", 0.5)
             
         # 2. Construct the specialized context
         context = f"User's Live State: {current_emotion.upper()} (Intensity: {intensity}). "
