@@ -43,6 +43,7 @@ const AppContent = () => {
   const [negativeStreak, setNegativeStreak] = React.useState(0);
   const negativeStartTimeRef = React.useRef(null);
   const SUSTAINED_NEGATIVE_THRESHOLD = 20000; // 20 seconds in ms
+  const NEGATIVE_STREAK_THRESHOLD = 5; // consecutive negative detections before funny video popup
 
   // Local Mood Sync Listener (Zero Latency)
   React.useEffect(() => {

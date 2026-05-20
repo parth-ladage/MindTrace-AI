@@ -100,12 +100,18 @@ const FaceEmotionTracker = ({ onEmotionDetected }) => {
     const cornersY = (mouthLeft.y + mouthRight.y) / 2;
     const mouthDrop = (cornersY - mouthCenter.y) / faceWidth;
 
+    const leftEyebrow = landmarks[70];
+    const leftEye = landmarks[159];
+    const eyebrowRatio = Math.sqrt(Math.pow(leftEye.x - leftEyebrow.x, 2) + Math.pow(leftEye.y - leftEyebrow.y, 2)) / faceWidth;
+
     let detected = 'neutral';
     let intensity = 0.2;
 
-    if (smileRatio > 0.38) { detected = 'joy'; intensity = 0.8; }
-    else if (mouthRatio > 0.08) { detected = 'surprise'; intensity = 0.9; }
-    else if (mouthDrop > 0.002) { detected = 'sadness'; intensity = 0.6; }
+    if (smileRatio > 0.34) { detected = 'joy'; intensity = 0.8; }
+    else if (mouthRatio > 0.12) { detected = 'surprise'; intensity = 0.9; }
+    else if (mouthDrop > 0.015) { detected = 'sadness'; intensity = 0.6; }
+    else if (eyebrowRatio < 0.19) { detected = 'anger'; intensity = 0.7; }
+    else if (eyebrowRatio > 0.26) { detected = 'fear'; intensity = 0.7; }
 
     const emotionData = {
       dominant_emotion: detected.charAt(0).toUpperCase() + detected.slice(1),

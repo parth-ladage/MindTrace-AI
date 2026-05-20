@@ -116,11 +116,11 @@ const BackgroundEmotionTracker = ({ enabled }) => {
 
     // --- NATURAL NEURAL MAPPING (ELEVATED) ---
     const emotions = {
-      Joy: (smileRatio - 0.36) * 15,
-      Anger: (0.23 - eyebrowRatio) * 18 + (0.14 - browDistance) * 10,
-      Surprise: (mouthRatio - 0.09) * 12,
-      Sadness: (mouthDrop - 0.001) * 70,
-      Fear: (eyebrowRatio - 0.23) * 15 + (mouthRatio * 6)
+      Joy: (smileRatio - 0.32) * 10,
+      Anger: (0.21 - eyebrowRatio) * 12 + (0.12 - browDistance) * 8,
+      Surprise: (mouthRatio - 0.12) * 8,
+      Sadness: (mouthDrop - 0.01) * 15, // Reduced multiplier from 70 to 15, increased threshold
+      Fear: (eyebrowRatio - 0.26) * 10 + (mouthRatio * 3) // Adjusted threshold and multipliers
     };
 
     // Apply Natural Dampening & Clamping
@@ -135,9 +135,9 @@ const BackgroundEmotionTracker = ({ enabled }) => {
     let rawEmotion = 'Neutral';
     let rawIntensity = 0.2;
     
-    // Find the strongest biological signal
+    // Find the strongest biological signal — require a minimum of 0.30 to avoid resting-face noise
     const sorted = Object.entries(emotions).sort((a,b) => b[1] - a[1]);
-    if (sorted[0][1] > 0.18) {
+    if (sorted[0][1] > 0.30) {
       rawEmotion = sorted[0][0];
       rawIntensity = sorted[0][1];
     }

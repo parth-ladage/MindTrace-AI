@@ -35,6 +35,8 @@ import {
 
 import { notificationSystem } from '../utils/notifications';
 import CalendarInsights from './CalendarInsights';
+import VoiceEmotionTracker from './VoiceEmotionTracker';
+import WeeklySummary from './WeeklySummary';
 
 const Dashboard = ({ user, onNavigate, currentMood }) => {
   const [analytics, setAnalytics] = useState(null);
@@ -392,7 +394,13 @@ const Dashboard = ({ user, onNavigate, currentMood }) => {
       </div>
 
       {/* BOTTOM SECTION */}
-      <div className="pt-10 border-t border-borderglass">
+      <div className="pt-10 border-t border-borderglass space-y-8">
+        {/* Voice + Weekly Summary Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <VoiceEmotionTracker />
+          <WeeklySummary />
+        </div>
+
         <CalendarInsights history={analytics?.history} />
       </div>
     </div>

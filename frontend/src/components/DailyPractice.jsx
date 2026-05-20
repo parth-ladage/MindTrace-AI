@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, MessageCircle, Star, CheckCircle2, Shield, Heart } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Star, CheckCircle2, Shield, Heart, Sparkles } from 'lucide-react';
 
 const DailyPractice = ({ onBack }) => {
   const [completed, setCompleted] = useState([]);
