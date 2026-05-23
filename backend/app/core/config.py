@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     HUGGINGFACE_TOKEN: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
 
 
 settings = Settings()

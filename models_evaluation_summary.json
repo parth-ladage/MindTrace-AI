@@ -1,0 +1,100 @@
+{
+  "accuracy": 0.625,
+  "macro_f1": 0.645,
+  "per_class": {
+    "anger": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.667,
+      "support": 20
+    },
+    "fear": {
+      "precision": 1.0,
+      "recall": 0.45,
+      "f1": 0.621,
+      "support": 20
+    },
+    "joy": {
+      "precision": 0.952,
+      "recall": 1.0,
+      "f1": 0.976,
+      "support": 20
+    },
+    "neutral": {
+      "precision": 0.312,
+      "recall": 1.0,
+      "f1": 0.476,
+      "support": 20
+    },
+    "sadness": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.667,
+      "support": 20
+    },
+    "surprise": {
+      "precision": 1.0,
+      "recall": 0.3,
+      "f1": 0.462,
+      "support": 20
+    }
+  },
+  "confusion_matrix": [
+    [
+      10,
+      0,
+      0,
+      10,
+      0,
+      0
+    ],
+    [
+      0,
+      9,
+      0,
+      11,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      20,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      20,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      10,
+      10,
+      0
+    ],
+    [
+      0,
+      0,
+      1,
+      13,
+      0,
+      6
+    ]
+  ],
+  "labels": [
+    "anger",
+    "fear",
+    "joy",
+    "neutral",
+    "sadness",
+    "surprise"
+  ]
+}

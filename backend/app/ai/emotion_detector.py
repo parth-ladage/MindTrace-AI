@@ -3,7 +3,7 @@ import httpx
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
-from app.services.groq_service import groq_service
+from app.services.gemini_service import gemini_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -39,9 +39,9 @@ class EmotionDetectionEngine:
             logger.error(f"HF API Error: {e}")
             return None
 
-    async def detect_emotions_groq(self, text: str) -> Dict[str, float]:
-        """Detect emotions using Groq (Llama 3.3 70B) for high accuracy with anti-bias safeguards"""
-        if not groq_service.client:
+    async def detect_emotions_gemini(self, text: str) -> Dict[str, float]:
+        """Detect emotions using Gemini for high accuracy with anti-bias safeguards"""
+        if not gemini_service.client:
             return {}
         
         try:
@@ -59,12 +59,12 @@ class EmotionDetectionEngine:
                 "Values must be floats from 0.0 to 1.0 and should sum to approximately 1.0. "
                 "No other text or explanation."
             )
-            chat_completion = await groq_service.client.chat.completions.create(
+            chat_completion = await gemini_service.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                model="llama-3.3-70b-versatile",
+                model="gemini-1.5-flash",
                 max_tokens=100,
                 temperature=0.0,
                 response_format={"type": "json_object"}
@@ -79,11 +79,11 @@ class EmotionDetectionEngine:
             
             return emotions
         except Exception as e:
-            logger.error(f"Groq Emotion Detection Error: {e}")
+            logger.error(f"Gemini Emotion Detection Error: {e}")
             return {}
 
     async def analyze_text_comprehensive(self, text: str) -> Dict:
-        """Comprehensive analysis using Groq for superior insights with anti-bias safeguards"""
+        """Comprehensive analysis using Gemini for superior insights with anti-bias safeguards"""
         text_clean = text.strip().lower()
         if text_clean in self._cache:
             result = self._cache[text_clean].copy()
@@ -91,10 +91,10 @@ class EmotionDetectionEngine:
             result["cached"] = True
             return result
 
-        # Prioritize Groq for detection
-        emotions = await self.detect_emotions_groq(text)
+        # Prioritize Gemini for detection
+        emotions = await self.detect_emotions_gemini(text)
         
-        # Fallback to HF then keywords if Groq fails
+        # Fallback to HF then keywords if Gemini fails
         if not emotions:
             hf_results = await self._call_hf_api(self.emotion_url, text)
             if hf_results:
@@ -117,9 +117,9 @@ class EmotionDetectionEngine:
         total = positive_score + negative_score + 0.001  # avoid division by zero
         positivity = max(0.0, min(1.0, positive_score / total))
 
-        # Generate personalized suggestion via Groq
-        suggestions = await groq_service.get_personalized_suggestions(dominant_emotion, dominant_intensity, positivity)
-        insight = await groq_service.get_daily_quote(context=dominant_emotion)
+        # Generate personalized suggestion via Gemini
+        suggestions = await gemini_service.get_personalized_suggestions(dominant_emotion, dominant_intensity, positivity)
+        insight = await gemini_service.get_daily_quote(context=dominant_emotion)
 
         # Build balanced sentiment breakdown
         sentiment_positive = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.3

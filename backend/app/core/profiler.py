@@ -15,7 +15,7 @@ logger = logging.getLogger("mindtrace.profiler")
 
 # Module-level shared stats — accessible from both the middleware and the API endpoint
 _shared_stats: dict[str, dict] = {}
-SLOW_THRESHOLD_MS = 500
+SLOW_THRESHOLD_MS = 5000
 
 
 class PerformanceProfilerMiddleware(BaseHTTPMiddleware):

@@ -5,7 +5,7 @@ from app.core.security import get_current_user
 from app.core.database import get_database
 from app.services.emotional_tracking import emotional_tracking_engine
 from collections import defaultdict
-from app.services.groq_service import groq_service
+from app.services.gemini_service import gemini_service
 import statistics
 
 router = APIRouter()
@@ -108,9 +108,9 @@ async def get_analytics_summary(
     interests = user.get("interests", [])
 
     import asyncio
-    insight_task = groq_service.get_daily_quote(context=f"wellness index {current_wellness}% and dominant emotion {dominant_emotion}")
-    suggestions_task = groq_service.get_personalized_suggestions(dominant_emotion, current_wellness/100, (change + 100)/200)
-    hangouts_task = groq_service.get_place_suggestions(dominant_emotion, current_wellness/100, interests)
+    insight_task = gemini_service.get_daily_quote(context=f"wellness index {current_wellness}% and dominant emotion {dominant_emotion}")
+    suggestions_task = gemini_service.get_personalized_suggestions(dominant_emotion, current_wellness/100, (change + 100)/200)
+    hangouts_task = gemini_service.get_place_suggestions(dominant_emotion, current_wellness/100, interests)
     
     # Async gather with exception handling
     results = await asyncio.gather(insight_task, suggestions_task, hangouts_task, return_exceptions=True)
@@ -257,7 +257,7 @@ async def get_weekly_summary(
         })
     
     # 7. Generate AI-powered weekly synthesis
-    ai_synthesis = await groq_service.generate_weekly_synthesis(
+    ai_synthesis = await gemini_service.generate_weekly_synthesis(
         emotion_summary=emotion_summary,
         journal_snippets=journal_snippets
     )
