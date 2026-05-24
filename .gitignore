@@ -13,3 +13,8 @@ backend/app/ai/models/
 # OS
 .DS_Store
 Thumbs.db
+
+# ML Training Data & Environments
+ml_model/fer2013/
+ml_model/venv/
+ml_model/__pycache__/
