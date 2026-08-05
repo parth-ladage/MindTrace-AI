@@ -60,6 +60,11 @@ class Settings(BaseSettings):
             return [normalize(str(i)) for i in v if i]
         return v if v else []
 
+    # MLflow Configuration
+    MLFLOW_TRACKING_URI: str = "./mlruns"
+    MLFLOW_ENABLED: bool = True
+    MLFLOW_EXPERIMENT_PREFIX: str = "MindTrace"
+
     HUGGINGFACE_TOKEN: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None

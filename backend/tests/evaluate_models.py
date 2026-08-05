@@ -28,6 +28,16 @@ if os.path.exists(env_file):
 
 from app.ai.emotion_detector import emotion_engine
 
+# ==========================================
+# MLflow Integration
+# ==========================================
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+    print("WARNING: mlflow not installed. Evaluation will proceed without experiment tracking.")
+
 
 async def analyze_text(text: str):
     result = await emotion_engine.analyze_text_comprehensive(text)
@@ -100,41 +110,140 @@ async def main():
 
     await emotion_engine.initialize()
 
+    # ==========================================
+    # MLflow Experiment Setup
+    # ==========================================
+    if MLFLOW_AVAILABLE:
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "./mlruns"))
+        mlflow.set_experiment("MindTrace-Model-Evaluation")
+        print("MLflow tracking enabled — experiment: MindTrace-Model-Evaluation")
+
     golds = []
     preds = []
     details = []
 
-    for s in samples:
-        dom, emotions = await analyze_text(s["text"]) 
-        pred = dom or "neutral"
-        golds.append(s["label"])
-        preds.append(pred)
-        details.append({"id": s["id"], "text": s["text"], "gold": s["label"], "pred": pred, "emotions": emotions})
+    # Wrap evaluation in an MLflow run
+    run_context = mlflow.start_run(run_name="emotion_model_evaluation") if MLFLOW_AVAILABLE else _DummyContext()
 
-    labels = sorted(list(set(golds + preds)))
-    metrics = compute_metrics(golds, preds, labels)
+    with run_context:
+        # Log evaluation parameters
+        if MLFLOW_AVAILABLE:
+            mlflow.log_params({
+                "dataset_path": data_path,
+                "sample_count": len(samples),
+                "emotion_model": "j-hartmann/emotion-english-distilroberta-base",
+                "sentiment_model": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+                "gemini_model": "gemini-1.5-flash",
+            })
 
-    # Write detailed per-sample results
-    out_csv = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "models_evaluation_results.csv")
-    out_csv = os.path.abspath(out_csv)
-    with open(out_csv, "w", newline='', encoding='utf-8') as f:
-        fieldnames = ["id", "text", "gold", "pred", "emotions_json"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for d in details:
-            writer.writerow({"id": d["id"], "text": d["text"], "gold": d["gold"], "pred": d["pred"], "emotions_json": json.dumps(d["emotions"])})
+        for s in samples:
+            dom, emotions = await analyze_text(s["text"]) 
+            pred = dom or "neutral"
+            golds.append(s["label"])
+            preds.append(pred)
+            details.append({"id": s["id"], "text": s["text"], "gold": s["label"], "pred": pred, "emotions": emotions})
 
-    # Write summary JSON
-    summary_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "models_evaluation_summary.json")
-    summary_path = os.path.abspath(summary_path)
-    with open(summary_path, "w", encoding='utf-8') as f:
-        json.dump(metrics, f, indent=2)
+        labels = sorted(list(set(golds + preds)))
+        metrics = compute_metrics(golds, preds, labels)
+
+        # ==========================================
+        # Log metrics to MLflow
+        # ==========================================
+        if MLFLOW_AVAILABLE:
+            # Log top-level metrics
+            mlflow.log_metrics({
+                "accuracy": metrics["accuracy"],
+                "macro_f1": metrics["macro_f1"],
+            })
+
+            # Log per-class F1 scores
+            for class_name, class_stats in metrics["per_class"].items():
+                safe_name = class_name.replace(" ", "_")
+                mlflow.log_metrics({
+                    f"{safe_name}_precision": class_stats["precision"],
+                    f"{safe_name}_recall": class_stats["recall"],
+                    f"{safe_name}_f1": class_stats["f1"],
+                })
+
+        # Write detailed per-sample results
+        out_csv = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "models_evaluation_results.csv")
+        out_csv = os.path.abspath(out_csv)
+        with open(out_csv, "w", newline='', encoding='utf-8') as f:
+            fieldnames = ["id", "text", "gold", "pred", "emotions_json"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for d in details:
+                writer.writerow({"id": d["id"], "text": d["text"], "gold": d["gold"], "pred": d["pred"], "emotions_json": json.dumps(d["emotions"])})
+
+        # Write summary JSON
+        summary_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "models_evaluation_summary.json")
+        summary_path = os.path.abspath(summary_path)
+        with open(summary_path, "w", encoding='utf-8') as f:
+            json.dump(metrics, f, indent=2)
+
+        # ==========================================
+        # Log artifacts to MLflow
+        # ==========================================
+        if MLFLOW_AVAILABLE:
+            mlflow.log_artifact(out_csv)
+            mlflow.log_artifact(summary_path)
+
+            # Generate and log confusion matrix plot
+            try:
+                import matplotlib
+                matplotlib.use('Agg')  # Non-interactive backend
+                import matplotlib.pyplot as plt
+                import numpy as np
+
+                fig, ax = plt.subplots(figsize=(10, 8))
+                cm_array = np.array(metrics["confusion_matrix"])
+                im = ax.imshow(cm_array, interpolation='nearest', cmap=plt.cm.Blues)
+                ax.figure.colorbar(im, ax=ax)
+                ax.set(
+                    xticks=range(len(labels)),
+                    yticks=range(len(labels)),
+                    xticklabels=labels,
+                    yticklabels=labels,
+                    ylabel='True Label',
+                    xlabel='Predicted Label',
+                    title='Confusion Matrix — MindTrace Emotion Model'
+                )
+                plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+                # Add text annotations
+                thresh = cm_array.max() / 2.
+                for i in range(cm_array.shape[0]):
+                    for j in range(cm_array.shape[1]):
+                        ax.text(j, i, format(cm_array[i, j], 'd'),
+                                ha="center", va="center",
+                                color="white" if cm_array[i, j] > thresh else "black")
+                fig.tight_layout()
+
+                cm_plot_path = os.path.join(os.path.dirname(out_csv), "mlflow_confusion_matrix.png")
+                fig.savefig(cm_plot_path, dpi=150)
+                plt.close(fig)
+                mlflow.log_artifact(cm_plot_path)
+                print(f"Confusion matrix plot logged to MLflow: {cm_plot_path}")
+            except ImportError:
+                print("matplotlib not installed — skipping confusion matrix plot artifact")
+            except Exception as plot_err:
+                print(f"Could not generate confusion matrix plot: {plot_err}")
 
     # Print concise report
     print("Evaluation complete. Summary:")
     print(json.dumps(metrics, indent=2))
     print(f"Detailed per-sample results written to: {out_csv}")
     print(f"Summary JSON written to: {summary_path}")
+    if MLFLOW_AVAILABLE:
+        print("Results logged to MLflow. View with: mlflow ui")
+
+
+class _DummyContext:
+    """No-op context manager when MLflow is not available."""
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
 
 
 if __name__ == '__main__':

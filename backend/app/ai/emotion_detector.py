@@ -1,10 +1,15 @@
 import asyncio
 import httpx
 import logging
+import time
 from typing import Dict, List, Optional
 from datetime import datetime
 from app.services.gemini_service import gemini_service
 from app.core.config import settings
+from app.core.mlflow_config import (
+    init_mlflow, log_llm_call, log_hf_inference,
+    log_inference_call, Timer, MLFLOW_ENABLED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +24,8 @@ class EmotionDetectionEngine:
     
     async def initialize(self):
         self._initialized = True
+        # Initialize MLflow on engine startup
+        init_mlflow()
         logger.info("✓ Emotion Detection Engine initialized")
 
     async def _call_hf_api(self, url: str, text: str) -> Optional[List[Dict]]:
@@ -59,19 +66,35 @@ class EmotionDetectionEngine:
                 "Values must be floats from 0.0 to 1.0 and should sum to approximately 1.0. "
                 "No other text or explanation."
             )
-            chat_completion = await gemini_service.client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                model="gemini-1.5-flash",
-                max_tokens=100,
-                temperature=0.0,
-                response_format={"type": "json_object"}
-            )
+
+            with Timer() as timer:
+                chat_completion = await gemini_service.client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model="gemini-1.5-flash",
+                    max_tokens=100,
+                    temperature=0.0,
+                    response_format={"type": "json_object"}
+                )
+
             import json
-            emotions = json.loads(chat_completion.choices[0].message.content)
+            response_text = chat_completion.choices[0].message.content
+            emotions = json.loads(response_text)
             
+            # Log the Gemini emotion classification call
+            log_llm_call(
+                service_name="gemini",
+                model_name="gemini-1.5-flash",
+                function_name="detect_emotions_gemini",
+                prompt=system_prompt + "\n" + prompt,
+                response_text=response_text,
+                latency_ms=timer.elapsed_ms,
+                temperature=0.0,
+                max_tokens=100,
+            )
+
             # Normalize: ensure all expected keys exist
             for key in ["joy", "sadness", "anger", "fear", "surprise", "neutral"]:
                 if key not in emotions:
@@ -91,62 +114,97 @@ class EmotionDetectionEngine:
             result["cached"] = True
             return result
 
-        # Prioritize Gemini for detection
-        emotions = await self.detect_emotions_gemini(text)
-        
-        # Fallback to HF then keywords if Gemini fails
-        if not emotions:
-            hf_results = await self._call_hf_api(self.emotion_url, text)
-            if hf_results:
-                emotions = {r['label'].lower(): r['score'] for r in hf_results}
-            else:
-                emotions = self._fallback_emotions(text)
-        
-        dominant_emotion = max(emotions, key=emotions.get) if emotions else "neutral"
-        dominant_intensity = emotions.get(dominant_emotion, 0)
-        
-        # ANTI-BIAS SAFEGUARD: If the highest emotion intensity is very low,
-        # override to neutral to prevent false-positive negative emotions.
-        if dominant_intensity < 0.3 and dominant_emotion != "neutral":
-            dominant_emotion = "neutral"
-            dominant_intensity = emotions.get("neutral", 0.5)
-        
-        # Improved positivity calculation with balanced weighting
-        positive_score = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.5 + emotions.get("neutral", 0) * 0.4
-        negative_score = emotions.get("sadness", 0) + emotions.get("anger", 0) + emotions.get("fear", 0) * 0.8
-        total = positive_score + negative_score + 0.001  # avoid division by zero
-        positivity = max(0.0, min(1.0, positive_score / total))
+        with Timer() as total_timer:
+            # Track which provider was used
+            provider_used = "gemini"
 
-        # Generate personalized suggestion via Gemini
-        suggestions = await gemini_service.get_personalized_suggestions(dominant_emotion, dominant_intensity, positivity)
-        insight = await gemini_service.get_daily_quote(context=dominant_emotion)
-
-        # Build balanced sentiment breakdown
-        sentiment_positive = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.3
-        sentiment_negative = emotions.get("sadness", 0) + emotions.get("anger", 0) + emotions.get("fear", 0)
-        sentiment_neutral = emotions.get("neutral", 0)
-        sent_total = sentiment_positive + sentiment_negative + sentiment_neutral + 0.001
-
-        analysis_result = {
-            "emotions": emotions,
-            "dominant_emotion": dominant_emotion,
-            "dominant_intensity": dominant_intensity,
-            "positivity": round(positivity, 3),
-            "sentiment": {
-                "positive": round(sentiment_positive / sent_total, 3),
-                "neutral": round(sentiment_neutral / sent_total, 3),
-                "negative": round(sentiment_negative / sent_total, 3)
-            },
-            "suggestions": suggestions,
-            "insight": insight,
-            "timestamp": datetime.now().isoformat(),
-            "cached": False,
-            "embeddings": [0.0] * 384
-        }
-        
-        if emotions:
-            self._cache[text_clean] = analysis_result
+            # Prioritize Gemini for detection
+            emotions = await self.detect_emotions_gemini(text)
             
+            # Fallback to HF then keywords if Gemini fails
+            if not emotions:
+                with Timer() as hf_timer:
+                    hf_results = await self._call_hf_api(self.emotion_url, text)
+                if hf_results:
+                    emotions = {r['label'].lower(): r['score'] for r in hf_results}
+                    provider_used = "huggingface"
+                    # Log HF inference
+                    log_hf_inference(
+                        model_name=settings.EMOTION_MODEL,
+                        input_text=text,
+                        result={"dominant_emotion": max(emotions, key=emotions.get), "dominant_intensity": max(emotions.values())},
+                        latency_ms=hf_timer.elapsed_ms,
+                    )
+                else:
+                    emotions = self._fallback_emotions(text)
+                    provider_used = "keyword_fallback"
+            
+            dominant_emotion = max(emotions, key=emotions.get) if emotions else "neutral"
+            dominant_intensity = emotions.get(dominant_emotion, 0)
+            
+            # ANTI-BIAS SAFEGUARD: If the highest emotion intensity is very low,
+            # override to neutral to prevent false-positive negative emotions.
+            if dominant_intensity < 0.3 and dominant_emotion != "neutral":
+                dominant_emotion = "neutral"
+                dominant_intensity = emotions.get("neutral", 0.5)
+            
+            # Improved positivity calculation with balanced weighting
+            positive_score = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.5 + emotions.get("neutral", 0) * 0.4
+            negative_score = emotions.get("sadness", 0) + emotions.get("anger", 0) + emotions.get("fear", 0) * 0.8
+            total = positive_score + negative_score + 0.001  # avoid division by zero
+            positivity = max(0.0, min(1.0, positive_score / total))
+
+            # Generate personalized suggestion via Gemini
+            suggestions = await gemini_service.get_personalized_suggestions(dominant_emotion, dominant_intensity, positivity)
+            insight = await gemini_service.get_daily_quote(context=dominant_emotion)
+
+            # Build balanced sentiment breakdown
+            sentiment_positive = emotions.get("joy", 0) + emotions.get("surprise", 0) * 0.3
+            sentiment_negative = emotions.get("sadness", 0) + emotions.get("anger", 0) + emotions.get("fear", 0)
+            sentiment_neutral = emotions.get("neutral", 0)
+            sent_total = sentiment_positive + sentiment_negative + sentiment_neutral + 0.001
+
+            analysis_result = {
+                "emotions": emotions,
+                "dominant_emotion": dominant_emotion,
+                "dominant_intensity": dominant_intensity,
+                "positivity": round(positivity, 3),
+                "sentiment": {
+                    "positive": round(sentiment_positive / sent_total, 3),
+                    "neutral": round(sentiment_neutral / sent_total, 3),
+                    "negative": round(sentiment_negative / sent_total, 3)
+                },
+                "suggestions": suggestions,
+                "insight": insight,
+                "timestamp": datetime.now().isoformat(),
+                "cached": False,
+                "embeddings": [0.0] * 384
+            }
+            
+            if emotions:
+                self._cache[text_clean] = analysis_result
+
+        # Log the complete inference pipeline call
+        log_inference_call(
+            experiment_name="Emotion-Detection",
+            run_name=f"text_analysis/{provider_used}",
+            params={
+                "provider": provider_used,
+                "input_length": len(text),
+                "dominant_emotion": dominant_emotion,
+            },
+            metrics={
+                "latency_ms": total_timer.elapsed_ms,
+                "dominant_intensity": float(dominant_intensity),
+                "positivity": float(positivity),
+            },
+            tags={
+                "run_type": "text_emotion_analysis",
+                "provider": provider_used,
+                "dominant_emotion": dominant_emotion,
+            },
+        )
+
         return analysis_result
     
     async def analyze_image(self, image_bytes: bytes) -> Dict:
@@ -158,13 +216,15 @@ class EmotionDetectionEngine:
         headers = {"Authorization": f"Bearer {self.api_token}"}
         try:
             logger.info(f"Sending image to HF Vision API: {self.face_emotion_url}")
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.face_emotion_url, 
-                    headers=headers, 
-                    content=image_bytes, 
-                    timeout=20.0
-                )
+
+            with Timer() as timer:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        self.face_emotion_url, 
+                        headers=headers, 
+                        content=image_bytes, 
+                        timeout=20.0
+                    )
             
             if response.status_code == 200:
                 results = response.json()
@@ -175,6 +235,14 @@ class EmotionDetectionEngine:
                     emotions = {r['label'].lower(): r['score'] for r in data}
                     dominant_emotion = max(emotions, key=emotions.get)
                     dominant_intensity = emotions.get(dominant_emotion, 0)
+
+                    # Log image inference
+                    log_hf_inference(
+                        model_name="dima806/facial_emotions_image_detection",
+                        input_text=f"[image:{len(image_bytes)}bytes]",
+                        result={"dominant_emotion": dominant_emotion, "dominant_intensity": dominant_intensity},
+                        latency_ms=timer.elapsed_ms,
+                    )
                     
                     return {
                         "emotions": emotions,

@@ -7,6 +7,7 @@ from groq import AsyncGroq
 from openai import AsyncOpenAI
 import google.generativeai as genai
 from app.core.config import settings
+from app.core.mlflow_config import log_llm_call, Timer
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +29,22 @@ class GeminiService:
         
         try:
             prompt = f"Generate a short, impressive, and futuristic wellness quote related to {context} for a mind tracking app called MindTrace AI+. Keep it under 20 words."
-            chat_completion = await self.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="gemini-2.5-flash",
+
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="gemini-2.5-flash",
+                    max_tokens=50,
+                )
+
+            response_text = chat_completion.choices[0].message.content.strip().replace('"', '')
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="get_daily_quote", prompt=prompt,
+                response_text=response_text, latency_ms=timer.elapsed_ms,
                 max_tokens=50,
             )
-            return chat_completion.choices[0].message.content.strip().replace('"', '')
+            return response_text
         except Exception as e:
             logger.error(f"Error generating quote with Groq: {e}")
             return "Your mind is your most powerful tool. Trace it well."
@@ -52,12 +63,23 @@ class GeminiService:
                 "Format the URL as: (https://www.youtube.com/results?search_query=<relevant+search+terms>) "
                 "Return them as a simple list separated by newlines, no numbers."
             )
-            chat_completion = await self.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="gemini-2.5-flash",
+
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="gemini-2.5-flash",
+                    max_tokens=250,
+                )
+
+            response_text = chat_completion.choices[0].message.content.strip()
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="get_personalized_suggestions", prompt=prompt,
+                response_text=response_text, latency_ms=timer.elapsed_ms,
                 max_tokens=250,
+                extra_params={"dominant_emotion": dominant_emotion, "intensity": intensity},
             )
-            suggestions = chat_completion.choices[0].message.content.strip().split('\n')
+            suggestions = response_text.split('\n')
             # Clean up and limit to 3
             return [s.strip('- ').strip() for s in suggestions if s.strip()][:3]
         except Exception as e:
@@ -92,16 +114,24 @@ class GeminiService:
                 "Only return the JSON list."
             )
             
-            chat_completion = await self.client.chat.completions.create(
-                messages=[{"role": "system", "content": "You are an advanced AI wellness coach for MindTrace AI+."},
-                          {"role": "user", "content": prompt}],
-                model="gemini-2.5-flash",
-                max_tokens=400,
-                response_format={"type": "json_object"}
-            )
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[{"role": "system", "content": "You are an advanced AI wellness coach for MindTrace AI+."},
+                              {"role": "user", "content": prompt}],
+                    model="gemini-2.5-flash",
+                    max_tokens=400,
+                    response_format={"type": "json_object"}
+                )
             
             import json
             content = chat_completion.choices[0].message.content
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="get_ai_activities", prompt=prompt,
+                response_text=content, latency_ms=timer.elapsed_ms,
+                max_tokens=400,
+                extra_params={"dominant_emotion": dominant_emotion},
+            )
             data = json.loads(content)
             
             # Extract the list from potential root keys
@@ -168,15 +198,26 @@ class GeminiService:
                 "3. Provide 3 highly personalized, actionable wellness suggestions tailored EXACTLY to the nuances of their entry.\n"
                 "Format strictly as JSON: {\"dominant_emotion\": \"...\", \"intensity\": 0.0, \"suggestions\": [\"...\", \"...\", \"...\"]}"
             )
-            chat_completion = await self.client.chat.completions.create(
-                messages=[{"role": "system", "content": system_prompt},
-                          {"role": "user", "content": prompt}],
-                model="gemini-2.5-flash",
-                temperature=0.1, # Very low temperature for precise, deterministic classification
-                response_format={"type": "json_object"}
-            )
+
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[{"role": "system", "content": system_prompt},
+                              {"role": "user", "content": prompt}],
+                    model="gemini-2.5-flash",
+                    temperature=0.1, # Very low temperature for precise, deterministic classification
+                    response_format={"type": "json_object"}
+                )
+
             import json
-            return json.loads(chat_completion.choices[0].message.content)
+            response_text = chat_completion.choices[0].message.content
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="analyze_journal_sentiment",
+                prompt=system_prompt + "\n" + prompt,
+                response_text=response_text, latency_ms=timer.elapsed_ms,
+                temperature=0.1,
+            )
+            return json.loads(response_text)
         except Exception as e:
             logger.error(f"Error in Groq sentiment analysis: {e}")
             return {"dominant_emotion": "neutral", "intensity": 0.5, "suggestions": ["Continue journaling to build patterns."]}
@@ -194,12 +235,23 @@ class GeminiService:
                 "Suggest 3 specific types of places or activities where this user could decompress. "
                 "Return them as a simple list separated by newlines."
             )
-            chat_completion = await self.client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="gemini-2.5-flash",
+
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="gemini-2.5-flash",
+                    max_tokens=100,
+                )
+
+            response_text = chat_completion.choices[0].message.content.strip()
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="get_place_suggestions", prompt=prompt,
+                response_text=response_text, latency_ms=timer.elapsed_ms,
                 max_tokens=100,
+                extra_params={"dominant_emotion": dominant_emotion},
             )
-            places = chat_completion.choices[0].message.content.strip().split('\n')
+            places = response_text.split('\n')
             return [p.strip('- ').strip() for p in places if p.strip()][:3]
         except Exception as e:
             logger.error(f"Error in Groq place suggestions: {e}")
@@ -211,16 +263,26 @@ class GeminiService:
             return "I am processing your thoughts, but I need a moment to connect."
             
         try:
-            chat_completion = await self.client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": user_message}
-                ],
-                model="gemini-2.5-flash",
-                max_tokens=800,
-                temperature=0.7
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": user_message}
+                    ],
+                    model="gemini-2.5-flash",
+                    max_tokens=800,
+                    temperature=0.7
+                )
+
+            response_text = chat_completion.choices[0].message.content.strip()
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="_call_llm",
+                prompt=system_message + "\n" + user_message,
+                response_text=response_text, latency_ms=timer.elapsed_ms,
+                temperature=0.7, max_tokens=800,
             )
-            return chat_completion.choices[0].message.content.strip()
+            return response_text
         except Exception as e:
             logger.error(f"LLM Call Error: {e}")
             if "429" in str(e):
@@ -259,9 +321,18 @@ class GeminiService:
             model = genai.GenerativeModel("gemini-2.5-flash")
             
             prompt = "Please transcribe this audio accurately. Do not add any extra commentary, just return the exact transcription."
-            response = await model.generate_content_async([audio_file, prompt])
+
+            with Timer() as timer:
+                response = await model.generate_content_async([audio_file, prompt])
             
             text = response.text.strip()
+
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="transcribe_audio", prompt=prompt,
+                response_text=text, latency_ms=timer.elapsed_ms,
+                extra_params={"audio_size_bytes": len(audio_bytes), "filename": filename},
+            )
             
             return {
                 "text": text,
@@ -317,19 +388,30 @@ class GeminiService:
                 "Only return the JSON."
             )
             
-            chat_completion = await self.client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": "You are an expert behavioral psychologist providing weekly emotional synthesis for the MindTrace AI+ platform. Be objective and balanced."},
-                    {"role": "user", "content": prompt}
-                ],
-                model="gemini-2.5-flash",
-                max_tokens=500,
-                temperature=0.3,
-                response_format={"type": "json_object"}
-            )
+            system_msg = "You are an expert behavioral psychologist providing weekly emotional synthesis for the MindTrace AI+ platform. Be objective and balanced."
+
+            with Timer() as timer:
+                chat_completion = await self.client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model="gemini-2.5-flash",
+                    max_tokens=500,
+                    temperature=0.3,
+                    response_format={"type": "json_object"}
+                )
             
             import json
-            return json.loads(chat_completion.choices[0].message.content)
+            response_text = chat_completion.choices[0].message.content
+            log_llm_call(
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="generate_weekly_synthesis",
+                prompt=system_msg + "\n" + prompt,
+                response_text=response_text, latency_ms=timer.elapsed_ms,
+                temperature=0.3, max_tokens=500,
+            )
+            return json.loads(response_text)
         except Exception as e:
             logger.error(f"Weekly synthesis error: {e}")
             return {
