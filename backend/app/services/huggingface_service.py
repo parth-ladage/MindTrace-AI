@@ -1,6 +1,7 @@
 import aiohttp
 import logging
 from app.core.config import settings
+from app.core.mlflow_config import log_hf_inference, Timer
 
 logger = logging.getLogger(__name__)
 
@@ -28,29 +29,43 @@ class HuggingFaceService:
         payload = {"inputs": text}
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.API_URL, headers=headers, json=payload) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Hugging Face API error: {error_text}")
-                        return {"dominant_emotion": "neutral", "intensity": 0.5, "all_emotions": {}}
-                    
-                    data = await response.json()
-                    
-                    # Hugging Face returns a list of lists of objects: [[{"label": "...", "score": ...}, ...]]
-                    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
-                        results = data[0]
-                        # Find dominant
-                        dominant = max(results, key=lambda x: x['score'])
-                        all_emotions = {r['label']: r['score'] for r in results}
+            with Timer() as timer:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(self.API_URL, headers=headers, json=payload) as response:
+                        if response.status != 200:
+                            error_text = await response.text()
+                            logger.error(f"Hugging Face API error: {error_text}")
+                            return {"dominant_emotion": "neutral", "intensity": 0.5, "all_emotions": {}}
                         
-                        return {
-                            "dominant_emotion": dominant['label'],
-                            "intensity": dominant['score'],
-                            "all_emotions": all_emotions
-                        }
-                    
-                    return {"dominant_emotion": "neutral", "intensity": 0.5, "all_emotions": {}}
+                        data = await response.json()
+
+            # Hugging Face returns a list of lists of objects: [[{"label": "...", "score": ...}, ...]]
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                results = data[0]
+                # Find dominant
+                dominant = max(results, key=lambda x: x['score'])
+                all_emotions = {r['label']: r['score'] for r in results}
+                
+                result = {
+                    "dominant_emotion": dominant['label'],
+                    "intensity": dominant['score'],
+                    "all_emotions": all_emotions
+                }
+
+                # Log the HuggingFace inference call
+                log_hf_inference(
+                    model_name="j-hartmann/emotion-english-distilroberta-base",
+                    input_text=text,
+                    result={
+                        "dominant_emotion": dominant['label'],
+                        "dominant_intensity": dominant['score'],
+                    },
+                    latency_ms=timer.elapsed_ms,
+                )
+
+                return result
+            
+            return {"dominant_emotion": "neutral", "intensity": 0.5, "all_emotions": {}}
         except Exception as e:
             logger.error(f"Hugging Face Request failed: {e}")
             return {"dominant_emotion": "neutral", "intensity": 0.5, "all_emotions": {}}

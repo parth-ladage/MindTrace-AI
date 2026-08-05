@@ -1,0 +1,121 @@
+id,text,label
+1,"I'm so happy today! Everything is going great.",joy
+2,"I loved the surprise party, it made my day.",joy
+3,"Feeling excited about my promotion today.",joy
+4,"This is the best day I've had in a long time.",joy
+5,"I can't stop smiling, everything's awesome.",joy
+6,"I'm over the moon about the news.",joy
+7,"Thrilled to spend time with friends today.",joy
+8,"My heart is full of joy right now.",joy
+9,"I'm ecstatic about this achievement.",joy
+10,"I'm feeling delighted and grateful.",joy
+11,"I'm bubbling with happiness today.",joy
+12,"Couldn't be happier with how things turned out.",joy
+13,"Today was absolutely wonderful and uplifting.",joy
+14,"My mood is sunny and bright.",joy
+15,"I'm celebrating a small victory and feel joyful.",joy
+16,"Everything seems perfect and I'm elated.",joy
+17,"I'm feeling cheerful and optimistic today.",joy
+18,"Joyful and thankful for this moment.",joy
+19,"I'm in high spirits after good news.",joy
+20,"Such a joyful time with family and laughter.",joy
+21,"I feel very sad and lonely.",sadness
+22,"I'm feeling down after the breakup.",sadness
+23,"I cried myself to sleep last night.",sadness
+24,"Nothing seems to cheer me up anymore.",sadness
+25,"I'm so disappointed and depressed today.",sadness
+26,"My heart feels heavy and empty.",sadness
+27,"I've been feeling hopeless lately.",sadness
+28,"I'm struggling to find motivation to get up.",sadness
+29,"Tears keep coming without warning.",sadness
+30,"I feel isolated and alone in a crowd.",sadness
+31,"The sadness just won't go away.",sadness
+32,"I feel numb and tired of it all.",sadness
+33,"Today has been a really low, lonely day.",sadness
+34,"I miss the person I used to be.",sadness
+35,"My mood is gloomy and listless.",sadness
+36,"I feel overwhelmed by sorrow.",sadness
+37,"It's hard to find joy in anything.",sadness
+38,"I'm stuck in a deep funk.",sadness
+39,"The emptiness is becoming unbearable.",sadness
+40,"I wish I could stop feeling so sad.",sadness
+41,"I am so angry right now, I could scream!",anger
+42,"I'm furious about what they did to me.",anger
+43,"That made me really mad and upset.",anger
+44,"I want to punch something because I'm enraged.",anger
+45,"They infuriated me beyond words.",anger
+46,"I'm livid at how unfair this is.",anger
+47,"My blood is boiling with anger.",anger
+48,"I'm seething over the way I was treated.",anger
+49,"That situation really made me lose my temper.",anger
+50,"I'm annoyed and can't let it go.",anger
+51,"I'm angry and frustrated by the outcome.",anger
+52,"Raging at the injustice I just witnessed.",anger
+53,"I'm filled with resentment and ire.",anger
+54,"I feel enraged and betrayed right now.",anger
+55,"I'm so mad I can barely speak.",anger
+56,"The betrayal makes me furious.",anger
+57,"I'm outraged by their behavior.",anger
+58,"I can't stand what happened — it's infuriating.",anger
+59,"I'm trembling with anger over this.",anger
+60,"This anger won't calm down easily.",anger
+61,"I'm a bit nervous about the upcoming presentation.",fear
+62,"I'm scared and worried about the test.",fear
+63,"I feel terrified walking alone at night.",fear
+64,"Anxious and frightened about the results.",fear
+65,"I'm really worried someone will find out.",fear
+66,"I'm fearful about the diagnosis.",fear
+67,"My chest tightens with anxiety.",fear
+68,"I dread going to that meeting tomorrow.",fear
+69,"I'm terrified of making a mistake.",fear
+70,"My palms are sweaty and I'm fearful.",fear
+71,"I'm anxious about the future of my job.",fear
+72,"Feeling panic creeps in during the night.",fear
+73,"I'm worried about the potential consequences.",fear
+74,"Scared to speak up because of backlash.",fear
+75,"I'm uneasy and filled with dread.",fear
+76,"The thought makes me fearful and tense.",fear
+77,"I'm nervous and on edge most days.",fear
+78,"There's an overwhelming sense of fear inside me.",fear
+79,"I feel vulnerable and afraid right now.",fear
+80,"I'm frightened by what's coming next.",fear
+81,"Wow, I didn't expect that at all, what a surprise!",surprise
+82,"I was startled by the sudden news.",surprise
+83,"That unexpected gift amazed me.",surprise
+84,"I can't believe that happened, I'm shocked.",surprise
+85,"Suddenly everything changed, I was surprised.",surprise
+86,"That revelation totally took me by surprise.",surprise
+87,"I'm astonished by the unexpected turn of events.",surprise
+88,"It was an astonishing and pleasant surprise.",surprise
+89,"I was dumbfounded when I heard the news.",surprise
+90,"The news left me speechless in surprise.",surprise
+91,"That twist in the story amazed me.",surprise
+92,"I was taken aback by the announcement.",surprise
+93,"It was an unexpected shock that amazed everyone.",surprise
+94,"I never saw that coming — truly surprising.",surprise
+95,"The surprise left me both shocked and delighted.",surprise
+96,"I gasped when I found out — totally surprised.",surprise
+97,"That sudden change caught me off guard.",surprise
+98,"I was amazed by the unexpected success.",surprise
+99,"It was a startling and pleasant surprise.",surprise
+100,"I didn't anticipate this and felt amazed.",surprise
+101,"Just a normal day, nothing special.",neutral
+102,"I ate breakfast and went to work.",neutral
+103,"Today I completed my tasks as usual.",neutral
+104,"It was a routine afternoon with no events.",neutral
+105,"The weather was okay and I did chores.",neutral
+106,"I took a walk and read some emails.",neutral
+107,"Nothing remarkable happened today.",neutral
+108,"I had a cup of coffee and then went to bed.",neutral
+109,"I filled out some forms and did errands.",neutral
+110,"Today was uneventful and steady.",neutral
+111,"I walked the dog and then cooked dinner.",neutral
+112,"The day passed without any strong feelings.",neutral
+113,"I attended the usual meetings and returned home.",neutral
+114,"Completed work tasks and then relaxed quietly.",neutral
+115,"I went grocery shopping and prepared a simple meal.",neutral
+116,"The schedule was normal and predictable.",neutral
+117,"I did some cleaning and watched TV.",neutral
+118,"Had a standard day — neither good nor bad.",neutral
+119,"I followed my routine and nothing changed.",neutral
+120,"A plain, ordinary day with small chores.",neutral

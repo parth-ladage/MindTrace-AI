@@ -7,9 +7,11 @@ from app.ai.emotion_detector import emotion_engine
 from app.services.emotional_tracking import emotional_tracking_engine
 from app.services.scoring_engine import scoring_engine
 from app.services.intervention_engine import intervention_engine
+from app.services.gemini_service import gemini_service
 from app.services.groq_service import groq_service
 from app.schemas.models import EmotionEventCreate, EmotionEvent
 from app.websocket.manager import manager
+from app.core.config import settings
 from bson import ObjectId
 import logging
 
@@ -154,7 +156,7 @@ async def detect_audio_emotion(
     if len(audio_bytes) < 1000:
         raise HTTPException(status_code=400, detail="Audio file too small. Please record at least 1 second.")
     
-    # Step 1: Transcribe audio using Whisper
+    # Step 1: Transcribe audio using Whisper via Groq
     transcription = await groq_service.transcribe_audio(audio_bytes, filename=audio.filename or "audio.wav")
     
     if not transcription.get("text"):
@@ -323,7 +325,7 @@ async def get_emotion_statistics(
     
     # Get events from tracking engine
     from app.services.emotional_tracking import emotional_tracking_engine
-    stats = emotional_tracking_engine.get_emotional_stats(user_id, hours=hours // 24)
+    stats = emotional_tracking_engine.get_emotional_stats(user_id)
     
     return stats
 

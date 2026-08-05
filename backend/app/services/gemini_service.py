@@ -1,20 +1,26 @@
 import logging
 import io
+import tempfile
+import os
 from typing import List, Dict, Any
 from groq import AsyncGroq
+from openai import AsyncOpenAI
+import google.generativeai as genai
 from app.core.config import settings
 from app.core.mlflow_config import log_llm_call, Timer
 
 logger = logging.getLogger(__name__)
 
-class GroqService:
+class GeminiService:
     def __init__(self):
-        self.api_key = settings.GROQ_API_KEY
+        self.api_key = settings.GEMINI_API_KEY
         self.client = None
+        
         if self.api_key:
-            self.client = AsyncGroq(api_key=self.api_key)
+            self.client = AsyncOpenAI(api_key=self.api_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+            genai.configure(api_key=self.api_key)
         else:
-            logger.warning("GROQ_API_KEY not found. GroqService will be limited.")
+            logger.warning("GEMINI_API_KEY not found. GeminiService will be limited.")
 
     async def get_daily_quote(self, context: str = "general") -> str:
         """Generate an impressive wellness quote using Groq"""
@@ -27,13 +33,13 @@ class GroqService:
             with Timer() as timer:
                 chat_completion = await self.client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.3-70b-versatile",
+                    model="gemini-2.5-flash",
                     max_tokens=50,
                 )
 
             response_text = chat_completion.choices[0].message.content.strip().replace('"', '')
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="get_daily_quote", prompt=prompt,
                 response_text=response_text, latency_ms=timer.elapsed_ms,
                 max_tokens=50,
@@ -61,13 +67,13 @@ class GroqService:
             with Timer() as timer:
                 chat_completion = await self.client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.3-70b-versatile",
+                    model="gemini-2.5-flash",
                     max_tokens=250,
                 )
 
             response_text = chat_completion.choices[0].message.content.strip()
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="get_personalized_suggestions", prompt=prompt,
                 response_text=response_text, latency_ms=timer.elapsed_ms,
                 max_tokens=250,
@@ -112,7 +118,7 @@ class GroqService:
                 chat_completion = await self.client.chat.completions.create(
                     messages=[{"role": "system", "content": "You are an advanced AI wellness coach for MindTrace AI+."},
                               {"role": "user", "content": prompt}],
-                    model="llama-3.3-70b-versatile",
+                    model="gemini-2.5-flash",
                     max_tokens=400,
                     response_format={"type": "json_object"}
                 )
@@ -120,7 +126,7 @@ class GroqService:
             import json
             content = chat_completion.choices[0].message.content
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="get_ai_activities", prompt=prompt,
                 response_text=content, latency_ms=timer.elapsed_ms,
                 max_tokens=400,
@@ -148,7 +154,7 @@ class GroqService:
 
     async def analyze_journal_sentiment(self, text: str, hf_context: dict = None):
         """
-        Advanced Psychological Synthesis using Llama-3-70b.
+        Advanced Psychological Synthesis using Gemini 1.5 Flash.
         Combines raw NLP markers with deep contextual understanding to provide 
         extremely accurate emotional mapping.
         """
@@ -197,7 +203,7 @@ class GroqService:
                 chat_completion = await self.client.chat.completions.create(
                     messages=[{"role": "system", "content": system_prompt},
                               {"role": "user", "content": prompt}],
-                    model="llama-3.3-70b-versatile",
+                    model="gemini-2.5-flash",
                     temperature=0.1, # Very low temperature for precise, deterministic classification
                     response_format={"type": "json_object"}
                 )
@@ -205,7 +211,7 @@ class GroqService:
             import json
             response_text = chat_completion.choices[0].message.content
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="analyze_journal_sentiment",
                 prompt=system_prompt + "\n" + prompt,
                 response_text=response_text, latency_ms=timer.elapsed_ms,
@@ -233,13 +239,13 @@ class GroqService:
             with Timer() as timer:
                 chat_completion = await self.client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.3-70b-versatile",
+                    model="gemini-2.5-flash",
                     max_tokens=100,
                 )
 
             response_text = chat_completion.choices[0].message.content.strip()
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="get_place_suggestions", prompt=prompt,
                 response_text=response_text, latency_ms=timer.elapsed_ms,
                 max_tokens=100,
@@ -263,72 +269,86 @@ class GroqService:
                         {"role": "system", "content": system_message},
                         {"role": "user", "content": user_message}
                     ],
-                    model="llama-3.3-70b-versatile",
-                    max_tokens=250,
+                    model="gemini-2.5-flash",
+                    max_tokens=800,
                     temperature=0.7
                 )
 
             response_text = chat_completion.choices[0].message.content.strip()
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="_call_llm",
                 prompt=system_message + "\n" + user_message,
                 response_text=response_text, latency_ms=timer.elapsed_ms,
-                temperature=0.7, max_tokens=250,
+                temperature=0.7, max_tokens=800,
             )
             return response_text
         except Exception as e:
             logger.error(f"LLM Call Error: {e}")
-            return "I'm still here with you. Let's just breathe for a moment."
+            if "429" in str(e):
+                return "I'm so sorry, my mind is a little overwhelmed right now. Can you give me just a moment and try sending that again?"
+            return "I'm still here with you. Let's just take a quiet moment together."
 
     # ========================
-    # EXPANSION 1: Audio/Voice Emotion Detection via Whisper
+    # EXPANSION 1: Audio/Voice Emotion Detection via Gemini
     # ========================
-    async def transcribe_audio(self, audio_bytes: bytes, filename: str = "audio.wav") -> Dict[str, Any]:
+    async def transcribe_audio(self, audio_bytes: bytes, filename: str = "audio.webm") -> Dict[str, Any]:
         """
-        Transcribe audio using Groq's Whisper model.
+        Transcribe audio using Google Gemini.
         Returns the transcribed text for further emotion analysis.
         """
-        if not self.client:
-            return {"text": "", "error": "Groq client not initialized"}
+        if not self.api_key:
+            return {"text": "", "error": "Gemini API key not configured"}
         
+        tmp_path = ""
         try:
-            audio_file = io.BytesIO(audio_bytes)
-            audio_file.name = filename
+            # Extract extension from filename or default to .webm
+            import os
+            _, ext = os.path.splitext(filename)
+            if not ext:
+                ext = ".webm"
+                
+            # Create a temporary file with correct extension
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(audio_bytes)
+                tmp_path = tmp.name
+                
+            # Determine mime type
+            mime_type = "audio/webm" if ext.lower() == ".webm" else None
+                
+            # Upload to Gemini and generate transcription
+            audio_file = genai.upload_file(path=tmp_path, mime_type=mime_type) if mime_type else genai.upload_file(path=tmp_path)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            
+            prompt = "Please transcribe this audio accurately. Do not add any extra commentary, just return the exact transcription."
 
             with Timer() as timer:
-                transcription = await self.client.audio.transcriptions.create(
-                    file=(filename, audio_file),
-                    model="whisper-large-v3",
-                    language="en",
-                    response_format="verbose_json"
-                )
-
-            text = transcription.text
-            duration = getattr(transcription, 'duration', None)
+                response = await model.generate_content_async([audio_file, prompt])
+            
+            text = response.text.strip()
 
             log_llm_call(
-                service_name="groq", model_name="whisper-large-v3",
-                function_name="transcribe_audio",
-                prompt=f"[audio_transcription:{filename}]",
-                response_text=text,
-                latency_ms=timer.elapsed_ms,
-                extra_params={
-                    "audio_size_bytes": len(audio_bytes),
-                    "filename": filename,
-                    "audio_duration": duration if duration else "unknown",
-                    "transcription_length": len(text) if text else 0,
-                },
+                service_name="gemini", model_name="gemini-2.5-flash",
+                function_name="transcribe_audio", prompt=prompt,
+                response_text=text, latency_ms=timer.elapsed_ms,
+                extra_params={"audio_size_bytes": len(audio_bytes), "filename": filename},
             )
             
             return {
                 "text": text,
-                "duration": duration,
-                "language": getattr(transcription, 'language', 'en')
+                "duration": None, # Gemini doesn't return duration natively via this endpoint
+                "language": "en"
             }
         except Exception as e:
             logger.error(f"Audio transcription error: {e}")
             return {"text": "", "error": str(e)}
+        finally:
+            # Cleanup temp file
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception as e:
+                    logger.warning(f"Could not remove temporary audio file {tmp_path}: {e}")
 
     # ========================
     # EXPANSION 2: Weekly Emotional Synthesis
@@ -376,7 +396,7 @@ class GroqService:
                         {"role": "system", "content": system_msg},
                         {"role": "user", "content": prompt}
                     ],
-                    model="llama-3.3-70b-versatile",
+                    model="gemini-2.5-flash",
                     max_tokens=500,
                     temperature=0.3,
                     response_format={"type": "json_object"}
@@ -385,7 +405,7 @@ class GroqService:
             import json
             response_text = chat_completion.choices[0].message.content
             log_llm_call(
-                service_name="groq", model_name="llama-3.3-70b-versatile",
+                service_name="gemini", model_name="gemini-2.5-flash",
                 function_name="generate_weekly_synthesis",
                 prompt=system_msg + "\n" + prompt,
                 response_text=response_text, latency_ms=timer.elapsed_ms,
@@ -402,4 +422,4 @@ class GroqService:
                 "risk_level": "low"
             }
 
-groq_service = GroqService()
+gemini_service = GeminiService()

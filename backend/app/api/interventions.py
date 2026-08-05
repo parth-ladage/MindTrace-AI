@@ -10,7 +10,7 @@ from app.websocket.manager import manager
 from bson import ObjectId
 import logging
 
-from app.services.groq_service import groq_service
+from app.services.gemini_service import gemini_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,7 +44,7 @@ async def get_recommended_interventions(
         "escalation_level": escalation["escalation_level"]
     }
     
-    ai_activities = await groq_service.get_ai_activities(user_data, emotional_state)
+    ai_activities = await gemini_service.get_ai_activities(user_data, emotional_state)
     
     # Get user's safe links
     safe_links = await db.user_safe_links.find({"user_id": user_id}).to_list(5)

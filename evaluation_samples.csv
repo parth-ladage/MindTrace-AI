@@ -1,0 +1,31 @@
+id,text,label
+1,"I am so happy today! Everything is going great.",joy
+2,"I loved the surprise party, it made my day.",joy
+3,"Feeling excited about my promotion today.",joy
+4,"This is the best day I've had in a long time.",joy
+5,"I can't stop smiling, everything's awesome.",joy
+6,"I feel very sad and lonely.",sadness
+7,"I'm feeling down after the breakup.",sadness
+8,"I cried myself to sleep last night.",sadness
+9,"Nothing seems to cheer me up anymore.",sadness
+10,"I'm so disappointed and depressed today.",sadness
+11,"I am so angry right now, I could scream!",anger
+12,"I'm furious about what they did to me.",anger
+13,"That made me really mad and upset.",anger
+14,"I want to punch something because I'm enraged.",anger
+15,"They infuriated me beyond words.",anger
+16,"I'm a bit nervous about the upcoming presentation.",fear
+17,"I'm scared and worried about the test.",fear
+18,"I feel terrified walking alone at night.",fear
+19,"Anxious and frightened about the results.",fear
+20,"I'm really worried someone will find out.",fear
+21,"Wow, I didn't expect that at all, what a surprise!",surprise
+22,"I was startled by the sudden news.",surprise
+23,"That unexpected gift amazed me.",surprise
+24,"I can't believe that happened, I'm shocked.",surprise
+25,"Suddenly everything changed, I was surprised.",surprise
+26,"Just a normal day, nothing special.",neutral
+27,"I ate breakfast and went to work.",neutral
+28,"Today I completed my tasks as usual.",neutral
+29,"It was a routine afternoon with no events.",neutral
+30,"The weather was okay and I did chores.",neutral

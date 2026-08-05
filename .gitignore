@@ -5,6 +5,7 @@ dist/
 
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 .env
@@ -13,3 +14,11 @@ backend/app/ai/models/
 # OS
 .DS_Store
 Thumbs.db
+
+# ML Training Data & Environments
+ml_model/fer2013/
+ml_model/__pycache__/
+
+# MLflow
+mlruns/
+mlflow_confusion_matrix.png

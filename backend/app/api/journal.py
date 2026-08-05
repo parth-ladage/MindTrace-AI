@@ -24,14 +24,14 @@ async def create_journal_entry(
     db = get_database()
     
     from app.services.huggingface_service import huggingface_service
-    from app.services.groq_service import groq_service
+    from app.services.gemini_service import gemini_service
     
     # 1. Fast Initial NLP Analysis (Hugging Face DistilRoBERTa)
     hf_analysis = await huggingface_service.analyze_emotions(entry_data.content)
     
     # 2. Advanced Psychological Synthesis (Groq Llama-3-70b)
     # Pass the initial HF scan as context, but let the LLM make the final, more accurate determination.
-    ai_analysis = await groq_service.analyze_journal_sentiment(
+    ai_analysis = await gemini_service.analyze_journal_sentiment(
         text=entry_data.content, 
         hf_context=hf_analysis
     )
