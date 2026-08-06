@@ -125,7 +125,31 @@ The training script will generate model artifacts that can be used by the fronte
 
 ## 4) MLflow setup
 
-The backend already contains MLflow configuration in the app core package. To run and inspect MLflow locally:
+The backend already contains MLflow configuration in the app core package. Follow these steps to configure and run it locally.
+
+### 4.1 Install MLflow
+
+```bash
+cd /home/parth-ladage/projects/MindTrace-AI/backend
+source .venv/bin/activate
+pip install mlflow>=2.12.0
+```
+
+### 4.2 Configure environment variables
+
+Make sure your backend environment includes:
+
+```bash
+export MLFLOW_ENABLED=True
+export MLFLOW_TRACKING_URI=./mlruns
+export MLFLOW_EXPERIMENT_PREFIX=MindTrace
+```
+
+You can also add them to your backend `.env` file as shown in the backend setup section.
+
+### 4.3 Start the MLflow tracking UI
+
+Run the following command in a separate terminal:
 
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
@@ -139,13 +163,27 @@ Then open:
 http://localhost:5000
 ```
 
-To verify the MLflow integration:
+### 4.4 Run the backend with MLflow enabled
+
+In another terminal, start the FastAPI backend:
+
+```bash
+cd /home/parth-ladage/projects/MindTrace-AI/backend
+source .venv/bin/activate
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 4.5 Verify MLflow integration
+
+Run the smoke test:
 
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 source .venv/bin/activate
 python3 tests/test_mlflow_smoke.py
 ```
+
+This should create or update runs under the backend mlruns directory and allow you to view them in the MLflow UI.
 
 ## 5) Useful development commands
 
