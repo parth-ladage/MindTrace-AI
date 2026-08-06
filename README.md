@@ -64,6 +64,8 @@ MINDTRACE AI+ is a full-stack emotional wellness platform with a FastAPI backend
 
 ## 1) Backend setup
 
+### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 python3 -m venv .venv
@@ -71,7 +73,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
 Create a local environment file:
+
+### Linux / macOS
 
 ```bash
 cat > .env <<'EOF'
@@ -85,9 +98,31 @@ MLFLOW_EXPERIMENT_PREFIX=MindTrace
 EOF
 ```
 
+### Windows PowerShell
+
+```powershell
+@"
+SECRET_KEY=change-this-secret
+MONGODB_URL=mongodb://localhost:27017/mindtrace
+MONGODB_DB=mindtrace_db
+REDIS_URL=redis://localhost:6379/0
+MLFLOW_ENABLED=True
+MLFLOW_TRACKING_URI=./mlruns
+MLFLOW_EXPERIMENT_PREFIX=MindTrace
+"@ | Set-Content .env
+```
+
 Run the backend:
 
+### Linux / macOS
+
 ```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Windows PowerShell
+
+```powershell
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -99,8 +134,18 @@ http://localhost:8000/docs
 
 ## 2) Frontend setup
 
+### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/frontend
+npm install
+npm run dev
+```
+
+### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\frontend
 npm install
 npm run dev
 ```
@@ -113,12 +158,24 @@ http://localhost:5173
 
 ## 3) ML model training
 
+### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/ml_model
 python3 -m venv .venv
 source .venv/bin/activate
 pip install tensorflow tensorflowjs opencv-python numpy pandas matplotlib
 python3 train_model.py
+```
+
+### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\ml_model
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install tensorflow tensorflowjs opencv-python numpy pandas matplotlib
+python train_model.py
 ```
 
 The training script will generate model artifacts that can be used by the frontend if you copy them into the public models directory.
@@ -129,9 +186,19 @@ The backend already contains MLflow configuration in the app core package. Follo
 
 ### 4.1 Install MLflow
 
+#### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 source .venv/bin/activate
+pip install mlflow>=2.12.0
+```
+
+#### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+.\.venv\Scripts\Activate.ps1
 pip install mlflow>=2.12.0
 ```
 
@@ -139,10 +206,20 @@ pip install mlflow>=2.12.0
 
 Make sure your backend environment includes:
 
+#### Linux / macOS
+
 ```bash
 export MLFLOW_ENABLED=True
 export MLFLOW_TRACKING_URI=./mlruns
 export MLFLOW_EXPERIMENT_PREFIX=MindTrace
+```
+
+#### Windows PowerShell
+
+```powershell
+$env:MLFLOW_ENABLED="True"
+$env:MLFLOW_TRACKING_URI="./mlruns"
+$env:MLFLOW_EXPERIMENT_PREFIX="MindTrace"
 ```
 
 You can also add them to your backend `.env` file as shown in the backend setup section.
@@ -151,9 +228,19 @@ You can also add them to your backend `.env` file as shown in the backend setup 
 
 Run the following command in a separate terminal:
 
+#### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 source .venv/bin/activate
+mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns
+```
+
+#### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+.\.venv\Scripts\Activate.ps1
 mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns
 ```
 
@@ -167,9 +254,19 @@ http://localhost:5000
 
 In another terminal, start the FastAPI backend:
 
+#### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 source .venv/bin/activate
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+.\.venv\Scripts\Activate.ps1
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -177,15 +274,27 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 Run the smoke test:
 
+#### Linux / macOS
+
 ```bash
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 source .venv/bin/activate
 python3 tests/test_mlflow_smoke.py
 ```
 
+#### Windows PowerShell
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+.\.venv\Scripts\Activate.ps1
+python tests/test_mlflow_smoke.py
+```
+
 This should create or update runs under the backend mlruns directory and allow you to view them in the MLflow UI.
 
 ## 5) Useful development commands
+
+### Linux / macOS
 
 Backend tests:
 
@@ -201,6 +310,24 @@ Load testing:
 cd /home/parth-ladage/projects/MindTrace-AI/backend
 source .venv/bin/activate
 python3 -m locust -f locustfile.py --host http://localhost:8000
+```
+
+### Windows PowerShell
+
+Backend tests:
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+.\.venv\Scripts\Activate.ps1
+pytest tests/
+```
+
+Load testing:
+
+```powershell
+cd C:\path\to\MindTrace-AI\backend
+.\.venv\Scripts\Activate.ps1
+python -m locust -f locustfile.py --host http://localhost:8000
 ```
 
 ## Documentation
